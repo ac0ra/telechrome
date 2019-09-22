@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# SOURCE
+# to instantiate with this, add:
+# tmp=`pwd`; # cd TELECHROME_PATH/ && . telechrome-init2 && cd $tmp
+# to your bashrc
+
+_telechrome_resolve_link() {
+  $(type -p greadlink readlink | head -1) "$1"
+}
+
+_telechrome_abs_dirname() {
+  local cwd="$(pwd)"
+  local path="$1"
+  
+  while [ -n "$path" ]; do
+    cd "${path%/*}"
+    local name="${path##*/}"
+    path="$(_telechrome_resolve_link "$name" || true)"
+  done
+
+  pwd
+  cd "$cwd"
+}
+
+_telechrome_source() {
+  local out=`grep $'#[ \t]*SOURCE' $1`
+  if [ "$out" == "" ]; then
+    echo "0"
+    return
+  fi
+  echo "1"
+}
+
+export TELECHROME_PATH=`pwd`
+
+case "$0" in
+bash | zsh)
+  source ../completions/telechrome.$0
+  ;;
+-bash )
+  source ../completions/telechrome.bash
+  ;;
+esac
+
+function telechrome() {
+    local original_path=$PATH
+    local source_command=0
+    export PATH="$TELECHROME_PATH:$PATH"
+
+    libexec_path=$TELECHROME_PATH
+
+    command="$1"
+    case "$command" in
+    "" | "-h" | "--help" )
+      telechrome-help
+      ;;
+    * )
+      command_path="$(command -v "telechrome-$command" || true)"
+      if [ ! -x "$command_path" ]; then
+        echo "telechrome: no such command \`$command'"
+      else
+          source_command=$(_telechrome_source $command_path)
+          shift
+          if [[ "$1" -eq "--complete" ]]; then
+              $command_path "$@"
+          elif [[ "$source_command" -eq 0 ]]; then
+              $command_path "$@"
+          else 
+              . $command_path "$@"
+          fi
+      fi
+      ;;
+    esac
+    export PATH=$original_path
+}
